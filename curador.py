@@ -132,52 +132,17 @@ def marcar_como_visto(titulo, relevancia):
             writer.writerow(['titulo', 'data_visto', 'relevancia'])
         writer.writerow([titulo, datetime.now().isoformat(), relevancia])
 
-# Analisar artigo com LLM (versão simulada por enquanto)
+# Analisar artigo com LLM
 def analisar_artigo(artigo, perfil):
     """
-    Por enquanto, vamos usar uma versão simplificada que simula a análise.
-    Depois substituiremos pela chamada real à API.
+    Versão principal que decide entre LLM real e fallback
     """
-    print(f"Analisando: {artigo['titulo'][:50]}...")
-    
-    # SIMULAÇÃO: Contar quantas palavras-chave aparecem
-    titulo_resumo = (artigo['titulo'] + ' ' + artigo['resumo']).lower()
-    
-    # Contar ocorrências de palavras-chave
-    matches = []
-    for kw in perfil['palavras_chave']:
-        if kw.lower() in titulo_resumo:
-            matches.append(kw)
-    
-    # Contar ocorrências de áreas
-    areas_encontradas = []
-    for area in perfil['areas']:
-        if area.lower() in titulo_resumo:
-            areas_encontradas.append(area)
-    
-    # Calcular relevância (simulado)
-    pontuacao = len(matches) * 3 + len(areas_encontradas) * 2
-    
-    if pontuacao >= 10:
-        relevancia = "ALTA"
-    elif pontuacao >= 5:
-        relevancia = "MEDIA"
+    # Se tiver token, usa LLM real
+    if os.getenv("HUGGINGFACE_TOKEN"):
+        return analisar_com_llm(artigo, perfil)
     else:
-        relevancia = "BAIXA"
-    
-    # Simular análise do LLM
-    analise = {
-        'relevancia': relevancia,
-        'pontuacao': pontuacao,
-        'justificativa': f"Encontradas {len(matches)} palavras-chave e {len(areas_encontradas)} áreas de interesse.",
-        'conceitos_chave': matches[:5],
-        'areas_relacionadas': areas_encontradas
-    }
-    
-    # Pequena pausa para não sobrecarregar
-    time.sleep(0.5)
-    
-    return analise
+        # Fallback para a versão local
+        return analisar_artigo_fallback(artigo, perfil)
 
 # Gerar mensagem formatada
 def formatar_mensagem(artigo, analise):
@@ -246,6 +211,10 @@ def salvar_recomendacao(artigo, analise):
 
 # Função principal
 def main():
+
+    # Carregar variáveis de ambiente
+    load_dotenv()
+    
     print("=" * 60)
     print("CURADOR DE ARTIGOS - PHYSICAL REVIEW LETTERS")
     print("=" * 60)
@@ -308,6 +277,144 @@ def main():
     print(f"\nRecomendações salvas em: {RESULTADOS_FILE}")
     print(f"Histórico salvo em: {ARTIGOS_VISTOS_FILE}")
     print(f"Fim: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+import os
+from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
+def analisar_com_llm(artigo, perfil):
+    """
+    Analisa um artigo usando a Hugging Face Inference API
+    """
+    print(f"  ↳ Enviando para LLM: {artigo['titulo'][:50]}...")
+    
+    # Obter token do ambiente
+    hf_token = os.getenv("HUGGINGFACE_TOKEN")
+    if not hf_token:
+        print("  ↳ ⚠️ Token da Hugging Face não encontrado. Usando fallback local.")
+        return analisar_artigo_fallback(artigo, perfil)
+    
+    try:
+        # Inicializar cliente
+        client = InferenceClient(token=hf_token)
+        
+        # Construir prompt
+        prompt = self.construir_prompt_llm(artigo, perfil)
+        
+        # Chamar API
+        response = client.chat_completion(
+            model="mistralai/Mistral-7B-Instruct-v0.3",
+            messages=[
+                {"role": "system", "content": "Você é um assistente especializado em curadoria de artigos científicos em física. Responda apenas com JSON válido."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=800,
+            response_format={"type": "json_object"}
+        )
+        
+        # Extrair resposta
+        resultado = response['choices'][0]['message']['content']
+        
+        # Parse do JSON
+        import json
+        analise = json.loads(resultado)
+        
+        # Validar campos obrigatórios
+        if not all(k in analise for k in ['relevancia', 'justificativa', 'pontuacao', 'conceitos_chave']):
+            raise ValueError("Resposta do LLM não contém todos os campos obrigatórios")
+        
+        print(f"  ↳ ✓ Análise concluída: {analise['relevancia']} ({analise['pontuacao']}/10)")
+        return analise
+        
+    except Exception as e:
+        print(f"  ↳ ⚠️ Erro na API: {e}. Usando fallback local.")
+        return analisar_artigo_fallback(artigo, perfil)
+
+def construir_prompt_llm(artigo, perfil):
+    """
+    Constrói o prompt para o LLM
+    """
+    # Formatar áreas de interesse
+    areas = ", ".join(perfil['areas'])
+    keywords = ", ".join(perfil['palavras_chave'])
+    
+    # Formatar autores
+    autores = artigo.get('autores', [])
+    autores_str = ", ".join([a.get('name', '') for a in autores[:3]])
+    if len(autores) > 3:
+        autores_str += f" et al."
+    
+    prompt = f"""
+Analise este artigo da Physical Review Letters e determine sua relevância para um pesquisador.
+
+## Perfil do Pesquisador:
+- Áreas de pesquisa: {areas}
+- Palavras-chave de interesse: {keywords}
+- {perfil.get('instrucoes_extras', '')}
+
+## Artigo:
+Título: {artigo['titulo']}
+Autores: {autores_str}
+Resumo: {artigo['resumo']}
+
+## Instruções:
+1. Avalie a relevância deste artigo para o pesquisador baseado no perfil acima
+2. Atribua uma pontuação de 0 a 10 (0 = totalmente irrelevante, 10 = extremamente relevante)
+3. Classifique a relevância como: "BAIXA" (0-3), "MEDIA" (4-6), "ALTA" (7-10)
+4. Identifique os principais conceitos e palavras-chave do artigo
+5. Escreva uma justificativa breve (2-3 frases) explicando sua avaliação
+
+## Formato de Resposta (JSON obrigatório):
+{{
+    "relevancia": "ALTA/MEDIA/BAIXA",
+    "pontuacao": 7,
+    "justificativa": "Este artigo é relevante porque...",
+    "conceitos_chave": ["conceito1", "conceito2", "conceito3"]
+}}
+"""
+    return prompt
+
+def analisar_artigo_fallback(artigo, perfil):
+    """
+    Versão fallback quando a API não está disponível
+    (cópia da função anterior de simulação)
+    """
+    print(f"  ↳ Usando análise local (fallback)")
+    
+    titulo_resumo = (artigo['titulo'] + ' ' + artigo['resumo']).lower()
+    
+    # Contar palavras-chave
+    matches = []
+    for kw in perfil['palavras_chave']:
+        if kw.lower() in titulo_resumo:
+            matches.append(kw)
+    
+    # Contar áreas
+    areas_encontradas = []
+    for area in perfil['areas']:
+        if area.lower() in titulo_resumo:
+            areas_encontradas.append(area)
+    
+    # Calcular pontuação
+    pontuacao = len(matches) * 3 + len(areas_encontradas) * 2
+    
+    if pontuacao >= 10:
+        relevancia = "ALTA"
+    elif pontuacao >= 5:
+        relevancia = "MEDIA"
+    else:
+        relevancia = "BAIXA"
+    
+    return {
+        'relevancia': relevancia,
+        'pontuacao': pontuacao,
+        'justificativa': f"Encontradas {len(matches)} palavras-chave e {len(areas_encontradas)} áreas de interesse.",
+        'conceitos_chave': matches[:5]
+    }
 
 if __name__ == "__main__":
     main()
