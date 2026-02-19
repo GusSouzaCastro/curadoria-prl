@@ -27,51 +27,76 @@ def carregar_perfil():
 
 # Buscar feed RSS da PRL
 def buscar_feed_prl():
-    """Busca o feed RSS da Physical Review Letters"""
+    """Busca o feed RSS oficial da Physical Review Letters"""
     print("Buscando feed da PRL...")
     
-    # URLs corretas para feeds RSS da APS Physics
-    urls_teste = [
-        "https://journals.aps.org/prl/rss/current.xml",  # PRL (seu alvo original)
-        "https://journals.aps.org/prd/rss/current.xml",  # PRD (o que você testou)
-        "https://journals.aps.org/pre/rss/current.xml",  # PRE (opcional)
-    ]
+    # URL CORRETA do feed RSS da PRL
+    feed_url = "https://feeds.aps.org/rss/recent/prl.xml"
     
-    feed_url = None
-    for url in urls_teste:
-        try:
-            print(f"Testando: {url}")
-            teste = feedparser.parse(url)
-            if teste.entries and len(teste.entries) > 0:
-                feed_url = url
-                print(f"✓ Feed encontrado em: {url}")
-                break
+    try:
+        # Fazer o parse do feed
+        feed = feedparser.parse(feed_url)
+        
+        # Verificar se o feed tem entries (artigos)
+        if not feed.entries:
+            print(f"⚠️ Feed encontrado, mas não contém artigos. Verifique a URL: {feed_url}")
+            return []
+        
+        print(f"✓ Feed encontrado! Processando {len(feed.entries)} artigos...")
+        
+        artigos = []
+        for entry in feed.entries[:15]:  # Últimos 15 artigos
+            # Extrair informações básicas
+            titulo = entry.get('title', 'Sem título')
+            link = entry.get('link', '')
+            
+            # Extrair resumo: pode estar em summary, description ou content
+            resumo = entry.get('summary', '')
+            if not resumo and hasattr(entry, 'content'):
+                resumo = entry.content[0].value if entry.content else ''
+            if not resumo:
+                resumo = entry.get('description', 'Resumo não disponível')
+            
+            # Limpar tags HTML do resumo (se houver)
+            resumo = re.sub(r'<[^>]+>', '', resumo)
+            
+            # Extrair autores
+            if hasattr(entry, 'authors'):
+                autores = [{'name': a.name} for a in entry.authors if hasattr(a, 'name')]
             else:
-                print(f"  ↳ Sem entries (pode não ser feed RSS)")
-        except Exception as e:
-            print(f"  ↳ Erro: {e}")
-    
-    if not feed_url:
-        print("Nenhum feed RSS encontrado. Usando fallback...")
-        feed_url = "https://journals.aps.org/prl/rss/current.xml"
-    
-    # Fazer o parse do feed
-    feed = feedparser.parse(feed_url)
-    
-    artigos = []
-    for entry in feed.entries[:15]:  # Últimos 15 artigos
-        artigo = {
-            'titulo': entry.get('title', 'Sem título'),
-            'resumo': entry.get('summary', entry.get('description', 'Sem resumo')),
-            'link': entry.get('link', ''),
-            'publicado': entry.get('published', entry.get('updated', 'Data desconhecida')),
-            'autores': entry.get('authors', [{'name': a} for a in entry.get('author', '').split(',')]) if entry.get('authors') else [],
-            'doi': extrair_doi(entry.get('link', ''))
-        }
-        artigos.append(artigo)
-    
-    print(f"Encontrados {len(artigos)} artigos no feed")
-    return artigos
+                autor_texto = entry.get('author', '')
+                autores = [{'name': a.strip()} for a in autor_texto.split(',')] if autor_texto else []
+            
+            # Extrair data de publicação
+            publicado = entry.get('published', entry.get('updated', 'Data desconhecida'))
+            
+            # Extrair DOI (se disponível)
+            doi = None
+            if hasattr(entry, 'prism_doi'):
+                doi = entry.prism_doi
+            elif hasattr(entry, 'dc_identifier'):
+                doi = entry.dc_identifier.replace('doi:', '')
+            else:
+                # Tentar extrair do link
+                match = re.search(r'10\.1103/[^"]+', link)
+                doi = match.group(0) if match else None
+            
+            artigo = {
+                'titulo': titulo,
+                'resumo': resumo,
+                'link': link,
+                'publicado': publicado,
+                'autores': autores,
+                'doi': doi
+            }
+            artigos.append(artigo)
+        
+        print(f"✓ {len(artigos)} artigos processados com sucesso")
+        return artigos
+        
+    except Exception as e:
+        print(f"✗ Erro ao processar feed: {e}")
+        return []
 
 def extrair_doi(link):
     """Extrai DOI do link"""
