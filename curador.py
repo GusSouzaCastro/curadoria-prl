@@ -30,27 +30,30 @@ def buscar_feed_prl():
     """Busca o feed RSS da Physical Review Letters"""
     print("Buscando feed da PRL...")
     
-    # Tentar URLs comuns do feed da PRL
+    # URLs corretas para feeds RSS da APS Physics
     urls_teste = [
-        "https://journals.aps.org/prl/rss/current.xml",
-        "https://journals.aps.org/prl/feed",
-        "https://rss.journals.aps.org/prl/current.xml"
+        "https://journals.aps.org/prl/rss/current.xml",  # PRL (seu alvo original)
+        "https://journals.aps.org/prd/rss/current.xml",  # PRD (o que você testou)
+        "https://journals.aps.org/pre/rss/current.xml",  # PRE (opcional)
     ]
     
     feed_url = None
     for url in urls_teste:
         try:
+            print(f"Testando: {url}")
             teste = feedparser.parse(url)
-            if teste.entries:
+            if teste.entries and len(teste.entries) > 0:
                 feed_url = url
-                print(f"Feed encontrado em: {url}")
+                print(f"✓ Feed encontrado em: {url}")
                 break
-        except:
-            continue
+            else:
+                print(f"  ↳ Sem entries (pode não ser feed RSS)")
+        except Exception as e:
+            print(f"  ↳ Erro: {e}")
     
     if not feed_url:
-        print("Usando URL padrão - pode não funcionar")
-        feed_url = "https://journals.aps.org/prd/recent"
+        print("Nenhum feed RSS encontrado. Usando fallback...")
+        feed_url = "https://journals.aps.org/prl/rss/current.xml"
     
     # Fazer o parse do feed
     feed = feedparser.parse(feed_url)
