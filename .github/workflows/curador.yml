@@ -2,8 +2,8 @@ name: Curador de Artigos PRL
 
 on:
   schedule:
-    # Executar a cada 12 horas
-    - cron: '0 */12 * * *'
+    # Executar toda segunda 9h
+    - cron: '0 9 * * 1'
   workflow_dispatch:  # Permite execução manual
 
 jobs:

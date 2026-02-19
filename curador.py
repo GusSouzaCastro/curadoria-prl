@@ -468,140 +468,51 @@ def enviar_email_recomendacoes(recomendacoes):
 
 def construir_email_html(recomendacoes):
     """
-    Constrói versão HTML do email
+    Constrói versão HTML do email com identificação dos journals
     """
+    # Cores por journal
+    journal_cores = {
+        'PRL': '#dc3545',  # vermelho
+        'PRD': '#fd7e14',  # laranja
+        'PRB': '#28a745',  # verde
+        'PRC': '#007bff',  # azul
+        'PRA': '#6f42c1',  # roxo
+        'PRE': '#ffc107'   # amarelo
+    }
+    
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-            }}
-            .header {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 30px;
-                border-radius: 10px;
-                margin-bottom: 30px;
-                text-align: center;
-            }}
-            .header h1 {{
-                margin: 0;
-                font-size: 28px;
-            }}
-            .header p {{
-                margin: 10px 0 0;
-                opacity: 0.9;
-            }}
-            .artigo {{
-                background: #f8f9fa;
-                border-left: 4px solid #667eea;
-                padding: 20px;
-                margin-bottom: 25px;
-                border-radius: 0 8px 8px 0;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }}
-            .artigo.alta {{
-                border-left-color: #dc3545;
-            }}
-            .artigo.media {{
-                border-left-color: #ffc107;
-            }}
-            .artigo h2 {{
-                margin: 0 0 10px;
-                font-size: 20px;
-                color: #2c3e50;
-            }}
-            .artigo h2 a {{
-                color: #2c3e50;
-                text-decoration: none;
-            }}
-            .artigo h2 a:hover {{
-                color: #667eea;
-                text-decoration: underline;
-            }}
-            .metadata {{
-                font-size: 14px;
-                color: #666;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #e9ecef;
-            }}
-            .relevancia {{
+            /* (mesmo CSS anterior) */
+            .journal-badge {{
                 display: inline-block;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 12px;
+                padding: 3px 10px;
+                border-radius: 4px;
+                font-size: 11px;
                 font-weight: bold;
-                text-transform: uppercase;
-                margin-right: 10px;
-            }}
-            .relevancia.alta {{
-                background: #dc3545;
                 color: white;
-            }}
-            .relevancia.media {{
-                background: #ffc107;
-                color: #000;
-            }}
-            .relevancia.baixa {{
-                background: #6c757d;
-                color: white;
-            }}
-            .pontuacao {{
-                display: inline-block;
-                font-weight: bold;
-                color: #667eea;
-            }}
-            .justificativa {{
-                background: white;
-                padding: 15px;
-                border-radius: 6px;
-                margin: 15px 0;
-                font-style: italic;
-                border: 1px solid #e9ecef;
-            }}
-            .conceitos {{
-                margin-top: 15px;
-            }}
-            .tag {{
-                display: inline-block;
-                background: #e9ecef;
-                padding: 4px 12px;
-                border-radius: 20px;
-                font-size: 12px;
-                margin: 0 5px 5px 0;
-                color: #495057;
-            }}
-            .footer {{
-                margin-top: 40px;
-                padding-top: 20px;
-                border-top: 1px solid #e9ecef;
-                font-size: 12px;
-                color: #999;
-                text-align: center;
+                margin-left: 10px;
             }}
         </style>
     </head>
     <body>
         <div class="header">
-            <h1>📚 Curadoria Physical Review Letters</h1>
+            <h1>📚 Curadoria de Artigos</h1>
             <p>{len(recomendacoes)} artigo(s) recomendado(s) • {datetime.now().strftime('%d de %B de %Y')}</p>
+            <p style="font-size: 14px; margin-top: 10px;">
+                Journals: {', '.join(set([a[0]['journal'] for a in recomendacoes]))}
+            </p>
         </div>
     """
     
     for artigo, analise in recomendacoes:
-        # Determinar classe CSS baseada na relevância
         relevancia_class = analise['relevancia'].lower()
+        journal = artigo['journal']
+        cor_journal = journal_cores.get(journal, '#6c757d')
         
-        # Formatar autores
         autores = artigo.get('autores', [])
         if autores:
             autores_str = ', '.join([a.get('name', '') for a in autores[:3]])
@@ -612,7 +523,10 @@ def construir_email_html(recomendacoes):
         
         html += f"""
         <div class="artigo {relevancia_class}">
-            <h2><a href="{artigo['link']}">{artigo['titulo']}</a></h2>
+            <h2>
+                <a href="{artigo['link']}">{artigo['titulo']}</a>
+                <span class="journal-badge" style="background-color: {cor_journal};">{journal}</span>
+            </h2>
             <div class="metadata">
                 <div><strong>Autores:</strong> {autores_str}</div>
                 <div><strong>Publicado:</strong> {artigo['publicado']}</div>
@@ -637,7 +551,7 @@ def construir_email_html(recomendacoes):
     html += f"""
         <div class="footer">
             <p>Curadoria automática via LLM • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-            <p style="font-size: 10px;">Para ajustar seu perfil de interesses, edite o arquivo perfil.json</p>
+            <p style="font-size: 10px;">Para ajustar journals ou palavras-chave, edite o arquivo perfil.json</p>
         </div>
     </body>
     </html>

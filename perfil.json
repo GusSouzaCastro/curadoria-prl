@@ -12,5 +12,25 @@
   ],
   "revistas_prioridade": ["Physical Review Letters", "PRL"],
   "relevancia_minima": 5,
-  "instrucoes_extras": "Tenho interesse especial em artigos que combinem teoria e experimento, e em artigos de revisão, úteis para doutorandos ainda sem anos de experiência na área."
+  "instrucoes_extras": "Tenho interesse especial em artigos que combinem teoria e experimento, e em artigos de revisão, úteis para doutorandos ainda sem anos de experiência na área.",
+  "journals": [
+    {
+      "sigla": "PRL",
+      "nome": "Physical Review Letters",
+      "feed_url": "https://feeds.aps.org/rss/recent/prl.xml",
+      "ativo": true
+    },
+    {
+      "sigla": "PRD",
+      "nome": "Physical Review D",
+      "feed_url": "https://feeds.aps.org/rss/recent/prd.xml",
+      "ativo": true
+    },
+    {
+      "sigla": "PRC",
+      "nome": "Physical Review C",
+      "feed_url": "https://feeds.aps.org/rss/recent/prc.xml",
+      "ativo": false
+    }
+  ]
 }
