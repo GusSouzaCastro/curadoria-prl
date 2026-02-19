@@ -1,0 +1,16 @@
+{
+  "nome": "Gustavo Souza",
+  "areas": [
+    "particle physics",
+    "quantum chromodynamics",
+    "quantum field theory"
+  ],
+  "palavras_chave": [
+    "LHC",
+    "LHCb",
+    "Heavy Flavours"
+  ],
+  "revistas_prioridade": ["Physical Review Letters", "PRL"],
+  "relevancia_minima": 5,
+  "instrucoes_extras": "Tenho interesse especial em artigos que combinem teoria e experimento, e em artigos de revisão, úteis para doutorandos ainda sem anos de experiência na área."
+}
