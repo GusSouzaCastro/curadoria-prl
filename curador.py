@@ -211,15 +211,14 @@ def salvar_recomendacao(artigo, analise):
 
 # Função principal
 def main():
-
-    # Carregar variáveis de ambiente
-    load_dotenv()
-    
     print("=" * 60)
     print("CURADOR DE ARTIGOS - PHYSICAL REVIEW LETTERS")
     print("=" * 60)
     print(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
+    
+    # Carregar variáveis de ambiente
+    load_dotenv()
     
     # Carregar perfil
     perfil = carregar_perfil()
@@ -266,6 +265,9 @@ def main():
             
             # Mostrar mensagem formatada
             print(formatar_mensagem(artigo, analise))
+        
+        # Pequena pausa para não sobrecarregar APIs
+        time.sleep(1)
     
     # Resumo final
     print("=" * 60)
@@ -276,6 +278,15 @@ def main():
     print(f"Artigos ignorados (já vistos): {len(artigos) - len([a for a in artigos if artigo_ja_visto(a['titulo'])])}")
     print(f"\nRecomendações salvas em: {RESULTADOS_FILE}")
     print(f"Histórico salvo em: {ARTIGOS_VISTOS_FILE}")
+    
+    # Enviar email com recomendações
+    if recomendacoes:
+        print("\n" + "=" * 60)
+        print("ENVIANDO EMAIL...")
+        enviar_email_recomendacoes(recomendacoes)
+    else:
+        print("\nNenhuma recomendação para enviar por email.")
+    
     print(f"Fim: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 import os
@@ -415,6 +426,254 @@ def analisar_artigo_fallback(artigo, perfil):
         'justificativa': f"Encontradas {len(matches)} palavras-chave e {len(areas_encontradas)} áreas de interesse.",
         'conceitos_chave': matches[:5]
     }
+    
+import resend
+from datetime import datetime
+
+def enviar_email_recomendacoes(recomendacoes):
+    """
+    Envia um email com todas as recomendações do dia
+    """
+    if not recomendacoes:
+        print("Nenhuma recomendação para enviar por email.")
+        return
+    
+    # Configurar cliente Resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    
+    # Email de destino (pode ser múltiplo)
+    email_destino = os.getenv("EMAIL_DESTINO", "").split(',')
+    if not email_destino:
+        print("⚠️ EMAIL_DESTINO não configurado. Pulando envio.")
+        return
+    
+    # Construir corpo do email
+    html_body = construir_email_html(recomendacoes)
+    text_body = construir_email_texto(recomendacoes)
+    
+    try:
+        # Enviar email
+        response = resend.Emails.send({
+            "from": os.getenv("EMAIL_REMETENTE", "curador@resend.dev"),
+            "to": email_destino,
+            "subject": f"📚 Curadoria PRL - {datetime.now().strftime('%d/%m/%Y')} ({len(recomendacoes)} artigos)",
+            "html": html_body,
+            "text": text_body
+        })
+        
+        print(f"✓ Email enviado com sucesso! ID: {response['id']}")
+        
+    except Exception as e:
+        print(f"✗ Erro ao enviar email: {e}")
+
+def construir_email_html(recomendacoes):
+    """
+    Constrói versão HTML do email
+    """
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                border-radius: 10px;
+                margin-bottom: 30px;
+                text-align: center;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 28px;
+            }}
+            .header p {{
+                margin: 10px 0 0;
+                opacity: 0.9;
+            }}
+            .artigo {{
+                background: #f8f9fa;
+                border-left: 4px solid #667eea;
+                padding: 20px;
+                margin-bottom: 25px;
+                border-radius: 0 8px 8px 0;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .artigo.alta {{
+                border-left-color: #dc3545;
+            }}
+            .artigo.media {{
+                border-left-color: #ffc107;
+            }}
+            .artigo h2 {{
+                margin: 0 0 10px;
+                font-size: 20px;
+                color: #2c3e50;
+            }}
+            .artigo h2 a {{
+                color: #2c3e50;
+                text-decoration: none;
+            }}
+            .artigo h2 a:hover {{
+                color: #667eea;
+                text-decoration: underline;
+            }}
+            .metadata {{
+                font-size: 14px;
+                color: #666;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #e9ecef;
+            }}
+            .relevancia {{
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin-right: 10px;
+            }}
+            .relevancia.alta {{
+                background: #dc3545;
+                color: white;
+            }}
+            .relevancia.media {{
+                background: #ffc107;
+                color: #000;
+            }}
+            .relevancia.baixa {{
+                background: #6c757d;
+                color: white;
+            }}
+            .pontuacao {{
+                display: inline-block;
+                font-weight: bold;
+                color: #667eea;
+            }}
+            .justificativa {{
+                background: white;
+                padding: 15px;
+                border-radius: 6px;
+                margin: 15px 0;
+                font-style: italic;
+                border: 1px solid #e9ecef;
+            }}
+            .conceitos {{
+                margin-top: 15px;
+            }}
+            .tag {{
+                display: inline-block;
+                background: #e9ecef;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                margin: 0 5px 5px 0;
+                color: #495057;
+            }}
+            .footer {{
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #e9ecef;
+                font-size: 12px;
+                color: #999;
+                text-align: center;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📚 Curadoria Physical Review Letters</h1>
+            <p>{len(recomendacoes)} artigo(s) recomendado(s) • {datetime.now().strftime('%d de %B de %Y')}</p>
+        </div>
+    """
+    
+    for artigo, analise in recomendacoes:
+        # Determinar classe CSS baseada na relevância
+        relevancia_class = analise['relevancia'].lower()
+        
+        # Formatar autores
+        autores = artigo.get('autores', [])
+        if autores:
+            autores_str = ', '.join([a.get('name', '') for a in autores[:3]])
+            if len(autores) > 3:
+                autores_str += f" et al."
+        else:
+            autores_str = "Autores não listados"
+        
+        html += f"""
+        <div class="artigo {relevancia_class}">
+            <h2><a href="{artigo['link']}">{artigo['titulo']}</a></h2>
+            <div class="metadata">
+                <div><strong>Autores:</strong> {autores_str}</div>
+                <div><strong>Publicado:</strong> {artigo['publicado']}</div>
+                <div><strong>DOI:</strong> {artigo.get('doi', 'N/A')}</div>
+                <div style="margin-top: 10px;">
+                    <span class="relevancia {relevancia_class}">{analise['relevancia']}</span>
+                    <span class="pontuacao">Pontuação: {analise['pontuacao']}/10</span>
+                </div>
+            </div>
+            
+            <div class="justificativa">
+                <strong>💡 Por que ler:</strong> {analise['justificativa']}
+            </div>
+            
+            <div class="conceitos">
+                <strong>🔑 Conceitos-chave:</strong><br>
+                {''.join([f'<span class="tag">{c}</span>' for c in analise['conceitos_chave']])}
+            </div>
+        </div>
+        """
+    
+    html += f"""
+        <div class="footer">
+            <p>Curadoria automática via LLM • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p style="font-size: 10px;">Para ajustar seu perfil de interesses, edite o arquivo perfil.json</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+def construir_email_texto(recomendacoes):
+    """
+    Constrói versão texto simples do email (fallback)
+    """
+    texto = f"📚 CURADORIA PRL - {datetime.now().strftime('%d/%m/%Y')}\n"
+    texto += f"Total de recomendações: {len(recomendacoes)}\n"
+    texto += "="*60 + "\n\n"
+    
+    for i, (artigo, analise) in enumerate(recomendacoes, 1):
+        autores = artigo.get('autores', [])
+        if autores:
+            autores_str = ', '.join([a.get('name', '') for a in autores[:3]])
+            if len(autores) > 3:
+                autores_str += f" et al."
+        else:
+            autores_str = "Autores não listados"
+        
+        texto += f"{i}. {artigo['titulo']}\n"
+        texto += f"   Autores: {autores_str}\n"
+        texto += f"   Relevância: {analise['relevancia']} ({analise['pontuacao']}/10)\n"
+        texto += f"   Justificativa: {analise['justificativa']}\n"
+        texto += f"   Link: {artigo['link']}\n"
+        texto += f"   DOI: {artigo.get('doi', 'N/A')}\n"
+        texto += f"   Conceitos: {', '.join(analise['conceitos_chave'])}\n\n"
+    
+    texto += "="*60 + "\n"
+    texto += f"Curadoria automática via LLM - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    
+    return texto
 
 if __name__ == "__main__":
     main()

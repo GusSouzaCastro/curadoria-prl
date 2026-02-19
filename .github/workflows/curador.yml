@@ -1,0 +1,42 @@
+name: Curador de Artigos PRL
+
+on:
+  schedule:
+    # Executar a cada 12 horas
+    - cron: '0 */12 * * *'
+  workflow_dispatch:  # Permite execução manual
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout do repositório
+      uses: actions/checkout@v3
+      
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Instalar dependências
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Criar arquivo .env com secrets
+      run: |
+        echo "HUGGINGFACE_TOKEN=${{ secrets.HUGGINGFACE_TOKEN }}" > .env
+        echo "RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
+        echo "EMAIL_DESTINO=${{ secrets.EMAIL_DESTINO }}" >> .env
+        echo "EMAIL_REMETENTE=${{ secrets.EMAIL_REMETENTE }}" >> .env
+        
+    - name: Executar curador
+      run: python curador.py
+      
+    - name: Commit e push das alterações (se houver)
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        git add artigos_vistos.csv recomendacoes.json
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Atualização automática: novos artigos processados" && git push)
